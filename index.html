@@ -2,19 +2,32 @@
 <html lang="sv">
 <head>
 <meta charset="UTF-8">
-<title>Bildigenkänning med TensorFlow</title>
+<title>TensorFlow Bildigenkänning</title>
 
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
 
 <style>
 body{
-    font-family: Arial;
-    text-align:center;
-    margin:40px;
+font-family: Arial;
+text-align:center;
+margin:40px;
+background:#f5f5f5;
 }
+
+h1{
+color:#333;
+}
+
 img{
-    max-width:300px;
-    margin-top:20px;
+max-width:300px;
+margin-top:20px;
+border-radius:10px;
+}
+
+#result{
+margin-top:20px;
+font-size:20px;
+font-weight:bold;
 }
 </style>
 
@@ -23,25 +36,29 @@ img{
 
 <h1>Bildigenkänning</h1>
 
+<p>Ladda upp en bild</p>
+
 <input type="file" id="imageUpload">
 
 <br>
 <img id="preview">
 
-<h2 id="result">Laddar modell...</h2>
+<div id="result">Laddar modell...</div>
 
 <script>
 
 let model;
 
 async function loadModel(){
-    model = await tf.loadLayersModel('model/model.json');
+
+    model = await tf.loadLayersModel("model.json");
+
     document.getElementById("result").innerText = "Modell laddad";
 }
 
 loadModel();
 
-document.getElementById("imageUpload").addEventListener("change", async function(e){
+document.getElementById("imageUpload").addEventListener("change", function(e){
 
     const file = e.target.files[0];
     const img = document.getElementById("preview");
@@ -50,18 +67,22 @@ document.getElementById("imageUpload").addEventListener("change", async function
 
     img.onload = async () => {
 
-        const tensor = tf.browser.fromPixels(img)
-            .resizeNearestNeighbor([224,224])
-            .toFloat()
-            .expandDims();
+        let tensor = tf.browser.fromPixels(img)
+        .resizeNearestNeighbor([224,224])
+        .toFloat()
+        .div(255.0)
+        .expandDims();
 
-        const prediction = await model.predict(tensor).data();
+        let prediction = model.predict(tensor);
 
-        const index = prediction.indexOf(Math.max(...prediction));
+        let data = await prediction.data();
+
+        let max = Math.max(...data);
+        let index = data.indexOf(max);
 
         document.getElementById("result").innerText =
         "Prediktion klass: " + index +
-        " (" + prediction[index].toFixed(3) + ")";
+        " | Säkerhet: " + (max*100).toFixed(2) + "%";
     }
 
 });
