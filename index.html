@@ -1,127 +1,564 @@
 <!DOCTYPE html>
 <html lang="sv">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TensorFlow Bildigenkänning</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bildigenkänning</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #13131a;
+      --border: #2a2a3a;
+      --accent: #00ffcc;
+      --accent2: #7b5ea7;
+      --text: #e8e8f0;
+      --muted: #6b6b80;
+      --danger: #ff4444;
+    }
 
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            text-align: center;
-            background: #f0f2f5;
-            margin: 0;
-            padding: 40px;
-        }
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            display: inline-block;
-            max-width: 90%;
-        }
-        h1 { color: #333; }
-        #preview {
-            max-width: 300px;
-            margin-top: 20px;
-            border-radius: 8px;
-            display: none; /* Döljs tills en bild väljs */
-        }
-        #status {
-            font-size: 1.2rem;
-            margin-top: 20px;
-            padding: 10px;
-            font-weight: bold;
-            color: #555;
-        }
-        input[type="file"] {
-            margin-top: 20px;
-            padding: 10px;
-        }
-    </style>
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Animated grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,255,204,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,204,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .wrapper {
+      position: relative;
+      z-index: 1;
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    header {
+      margin-bottom: 56px;
+    }
+
+    .tag {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      border: 1px solid rgba(0,255,204,0.3);
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 2px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: clamp(2.4rem, 6vw, 4rem);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #fff 40%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 1rem;
+      font-family: 'Space Mono', monospace;
+    }
+
+    /* Status bar */
+    #status-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 40px;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+      transition: background 0.4s;
+    }
+    .dot.loading { background: #ffcc00; animation: pulse 1s infinite; }
+    .dot.ready   { background: var(--accent); }
+    .dot.error   { background: var(--danger); }
+
+    @keyframes pulse {
+      0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+    }
+
+    /* Upload zone */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: var(--surface);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .upload-zone::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(0,255,204,0.07), transparent 70%);
+      pointer-events: none;
+    }
+
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(0,255,204,0.03);
+    }
+
+    .upload-icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+      filter: grayscale(0.3);
+    }
+
+    .upload-zone h2 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .upload-zone p {
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+    }
+
+    #file-input { display: none; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 20px;
+      padding: 10px 24px;
+      background: var(--accent);
+      color: #000;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.15s;
+    }
+
+    .btn:hover { opacity: 0.85; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    /* Preview + result */
+    #preview-section {
+      display: none;
+      margin-top: 40px;
+    }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 560px) {
+      .preview-grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    #preview-img {
+      width: 100%;
+      height: 220px;
+      object-fit: contain;
+      display: block;
+      background: #0d0d14;
+      padding: 8px;
+    }
+
+    #results {
+      padding: 16px;
+    }
+
+    .result-item {
+      margin-bottom: 14px;
+      animation: slideIn 0.3s ease both;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-10px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    .result-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.88rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .result-label span:last-child {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--accent);
+    }
+
+    .bar-track {
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent2), var(--accent));
+      border-radius: 3px;
+      transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+      width: 0%;
+    }
+
+    .top-prediction {
+      padding: 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .trophy { font-size: 1.2rem; }
+
+    .top-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+    }
+
+    .top-value {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--accent);
+    }
+
+    #error-msg {
+      display: none;
+      color: var(--danger);
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: rgba(255,68,68,0.08);
+      border: 1px solid rgba(255,68,68,0.3);
+      border-radius: 6px;
+    }
+
+    /* Class name editor */
+    .class-section {
+      margin-top: 48px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+    }
+
+    .class-section h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .class-section p {
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      margin-bottom: 16px;
+    }
+
+    #class-names-input {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    #class-names-input:focus { border-color: var(--accent); }
+
+    .hint {
+      font-size: 11px;
+      font-family: 'Space Mono', monospace;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+  </style>
 </head>
 <body>
+<div class="wrapper">
 
-    <div class="container">
-        <h1>Bildigenkänning</h1>
-        
-        <div id="status">Laddar AI-modell...</div>
-        
-        <input type="file" id="imageInput" accept="image/*">
-        <br>
-        <img id="preview" alt="Din bild">
+  <header>
+    <div class="tag">TensorFlow.js · Bildigenkänning</div>
+    <h1>Vision<br>Model</h1>
+    <p class="subtitle">// Ladda upp en bild och få en klassificering</p>
+  </header>
+
+  <div id="status-bar">
+    <div class="dot loading" id="status-dot"></div>
+    <span id="status-text">Laddar modell från tfjs-modell/model.json …</span>
+  </div>
+
+  <div id="error-msg"></div>
+
+  <div class="upload-zone" id="drop-zone">
+    <div class="upload-icon">🖼️</div>
+    <h2>Släpp en bild här</h2>
+    <p>PNG, JPG, WEBP — eller klicka för att välja</p>
+    <button class="btn" id="upload-btn" onclick="document.getElementById('file-input').click()">
+      ↑ Välj fil
+    </button>
+    <input type="file" id="file-input" accept="image/*"/>
+  </div>
+
+  <div id="preview-section">
+    <div class="preview-grid">
+      <div class="card">
+        <div class="card-header">Förhandsvisning</div>
+        <img id="preview-img" alt="Uppladdad bild"/>
+      </div>
+      <div class="card">
+        <div class="card-header">Resultat</div>
+        <div id="results"><p style="color:var(--muted);font-family:'Space Mono',monospace;font-size:12px;padding:16px">Analyserar…</p></div>
+        <div class="top-prediction" id="top-prediction" style="display:none">
+          <span class="trophy">🏆</span>
+          <div>
+            <div class="top-label">Bästa träff</div>
+            <div class="top-value" id="top-label-text">—</div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <script>
-        let model;
+    <div style="text-align:center;margin-top:24px">
+      <button class="btn" id="retry-btn">↺ Testa ny bild</button>
+    </div>
+  </div>
 
-        // Funktion för att ladda modellen
-      async function init() {
+  <!-- Class name editor -->
+  <div class="class-section">
+    <h3>Klassnamn (valfritt)</h3>
+    <p>// Ange klassnamn separerade med komma för att ersätta klass 0, 1, 2 …</p>
+    <input type="text" id="class-names-input" placeholder="t.ex. Katt, Hund, Fågel, Häst" />
+    <p class="hint">Lämna tomt för att visa klass-index istället.</p>
+  </div>
+
+</div>
+
+<script>
+  let model = null;
+
+  const statusDot  = document.getElementById('status-dot');
+  const statusText = document.getElementById('status-text');
+  const errorMsg   = document.getElementById('error-msg');
+  const fileInput  = document.getElementById('file-input');
+  const dropZone   = document.getElementById('drop-zone');
+  const previewSection = document.getElementById('preview-section');
+  const previewImg = document.getElementById('preview-img');
+  const resultsDiv = document.getElementById('results');
+  const topPred    = document.getElementById('top-prediction');
+  const topLabelEl = document.getElementById('top-label-text');
+  const retryBtn   = document.getElementById('retry-btn');
+  const classInput = document.getElementById('class-names-input');
+
+  function getClassNames() {
+    const raw = classInput.value.trim();
+    if (!raw) return null;
+    return raw.split(',').map(s => s.trim()).filter(Boolean);
+  }
+
+  function setStatus(state, msg) {
+    statusDot.className = 'dot ' + state;
+    statusText.textContent = msg;
+  }
+
+  function showError(msg) {
+    errorMsg.style.display = 'block';
+    errorMsg.textContent = '⚠ ' + msg;
+  }
+
+  // Load model
+  async function loadModel() {
     try {
-        console.log("Försöker ladda modell med Force-fix...");
-        
-        // Vi tvingar TensorFlow att ignorera strikta lager-kontroller
-        model = await tf.loadLayersModel('./model.json', { strict: false });
-        
-        console.log("Modell laddad med strict:false!");
-        document.getElementById("status").innerText = "Redo! Ladda upp en bild.";
-    } catch (err) {
-        console.error("Standardladdning misslyckades, testar Graph-metod...");
+      setStatus('loading', 'Laddar modell från tfjs-modell/model.json …');
+      // Försök relativ sökväg först, annars absolut GitHub Pages URL
+      const modelUrls = [
+        'tfjs-modell/model.json',
+        '/imagerecognition/tfjs-modell/model.json',
+        'https://alphadick1337.github.io/imagerecognition/tfjs-modell/model.json'
+      ];
+
+      let loaded = false;
+      for (const url of modelUrls) {
         try {
-            model = await tf.loadGraphModel('./model.json');
-            document.getElementById("status").innerText = "Redo! (Graph Mode)";
-        } catch (err2) {
-            console.error("Båda metoderna misslyckades:", err2);
-            document.getElementById("status").innerText = "Modell-filen är trasig eller inkompatibel.";
+          model = await tf.loadLayersModel(url);
+          loaded = true;
+          break;
+        } catch (e) {
+          console.warn('Försökte:', url, '— misslyckades');
         }
+      }
+      if (!loaded) throw new Error('Kunde inte ladda modellen från någon sökväg.');
+      setStatus('ready', 'Modell laddad — redo att klassificera bilder');
+    } catch (e) {
+      setStatus('error', 'Misslyckades med att ladda modellen');
+      showError('Kunde inte ladda modellen: ' + e.message + '. Kontrollera att tfjs-modell/model.json finns.');
+      console.error(e);
     }
-}
-        // Hantera bilduppladdning
-        document.getElementById("imageInput").addEventListener("change", async (e) => {
-            const file = e.target.files[0];
-            if (!file || !model) return;
+  }
 
-            const imgElement = document.getElementById("preview");
-            imgElement.src = URL.createObjectURL(file);
-            imgElement.style.display = "inline-block";
+  // Predict
+  async function predict(imgEl) {
+    if (!model) { showError('Modellen är inte laddad ännu.'); return; }
 
-            imgElement.onload = async () => {
-                document.getElementById("status").innerText = "Analyserar...";
+    resultsDiv.innerHTML = '<p style="color:var(--muted);font-family:\'Space Mono\',monospace;font-size:12px;padding:16px">Analyserar…</p>';
+    topPred.style.display = 'none';
 
-                // 1. Förbered bilden (Preprocessing)
-                // Vi använder tf.tidy för att automatiskt rensa minnet efteråt
-                const prediction = tf.tidy(() => {
-                    const tensor = tf.browser.fromPixels(imgElement)
-                        .resizeNearestNeighbor([224, 224]) // Ändra till din modells storlek om den inte är 224
-                        .toFloat()
-                        .div(255.0)
-                        .expandDims();
-                    return model.predict(tensor);
-                });
+    try {
+      // Get expected input shape
+      const inputShape = model.inputs[0].shape; // e.g. [null, 224, 224, 3]
+      const h = inputShape[1] || 224;
+      const w = inputShape[2] || 224;
 
-                // 2. Hämta resultat
-                const data = await (Array.isArray(prediction) ? prediction[0].data() : prediction.data());
-                
-                // 3. Hitta högsta värdet
-                const maxProbability = Math.max(...data);
-                const classIndex = data.indexOf(maxProbability);
+      const tensor = tf.tidy(() => {
+        let t = tf.browser.fromPixels(imgEl);
+        t = tf.image.resizeBilinear(t, [h, w]);
+        t = t.toFloat().div(255.0);
+        return t.expandDims(0);
+      });
 
-                document.getElementById("status").innerHTML = `
-                    Resultat: <strong>Klass ${classIndex}</strong><br>
-                    Säkerhet: ${(maxProbability * 100).toFixed(2)}%
-                `;
+      const preds = await model.predict(tensor).data();
+      tensor.dispose();
 
-                // Rensa upp prediktions-tensorn
-                if (Array.isArray(prediction)) {
-                    prediction.forEach(t => t.dispose());
-                } else {
-                    prediction.dispose();
-                }
-            };
+      const classNames = getClassNames();
+      const sorted = Array.from(preds)
+        .map((p, i) => ({ label: classNames ? (classNames[i] || `Klass ${i}`) : `Klass ${i}`, prob: p }))
+        .sort((a, b) => b.prob - a.prob);
+
+      // Show top 5
+      const top5 = sorted.slice(0, 5);
+      resultsDiv.innerHTML = top5.map((item, idx) => `
+        <div class="result-item" style="animation-delay:${idx * 60}ms">
+          <div class="result-label">
+            <span>${item.label}</span>
+            <span>${(item.prob * 100).toFixed(1)}%</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill" data-width="${(item.prob * 100).toFixed(1)}"></div>
+          </div>
+        </div>
+      `).join('');
+
+      // Animate bars
+      requestAnimationFrame(() => {
+        document.querySelectorAll('.bar-fill').forEach(bar => {
+          bar.style.width = bar.dataset.width + '%';
         });
-    </script>
+      });
+
+      // Top prediction
+      topLabelEl.textContent = top5[0].label + ' — ' + (top5[0].prob * 100).toFixed(1) + '%';
+      topPred.style.display = 'flex';
+
+    } catch (e) {
+      showError('Fel vid prediktion: ' + e.message);
+      console.error(e);
+    }
+  }
+
+  // Handle image selection
+  function handleImage(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      previewImg.onload = () => {
+        previewSection.style.display = 'block';
+        predict(previewImg);
+      };
+      previewImg.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  fileInput.addEventListener('change', e => handleImage(e.target.files[0]));
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    handleImage(e.dataTransfer.files[0]);
+  });
+  dropZone.addEventListener('click', e => {
+    if (e.target.id !== 'upload-btn') fileInput.click();
+  });
+
+  retryBtn.addEventListener('click', () => {
+    previewSection.style.display = 'none';
+    fileInput.value = '';
+    errorMsg.style.display = 'none';
+  });
+
+  loadModel();
+</script>
 </body>
 </html>
