@@ -1,107 +1,132 @@
 <!DOCTYPE html>
 <html lang="sv">
 <head>
-<meta charset="UTF-8">
-<title>TensorFlow Bildigenkänning</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TensorFlow Bildigenkänning</title>
 
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
 
-<style>
-body {
-    font-family: Arial;
-    text-align: center;
-    background: #f2f2f2;
-    margin-top: 40px;
-}
-
-img {
-    max-width: 300px;
-    margin-top: 20px;
-    border-radius: 10px;
-}
-
-#status {
-    font-size: 20px;
-    margin-top: 20px;
-    font-weight: bold;
-}
-</style>
-
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            background: #f0f2f5;
+            margin: 0;
+            padding: 40px;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: inline-block;
+            max-width: 90%;
+        }
+        h1 { color: #333; }
+        #preview {
+            max-width: 300px;
+            margin-top: 20px;
+            border-radius: 8px;
+            display: none; /* Döljs tills en bild väljs */
+        }
+        #status {
+            font-size: 1.2rem;
+            margin-top: 20px;
+            padding: 10px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="file"] {
+            margin-top: 20px;
+            padding: 10px;
+        }
+    </style>
 </head>
-
 <body>
 
-<h1>Bildigenkänning</h1>
-
-<input type="file" id="imageInput">
-<br>
-<img id="preview">
-<div id="status">Laddar modell...</div>
-
-<script>
-let model;
-
-async function loadModel() {
-    try {
-        // Fix 1 & 2: Vi använder loadGraphModel och en relativ sökväg ('./')
-        model = await tf.loadGraphModel('./model.json');
+    <div class="container">
+        <h1>Bildigenkänning</h1>
         
-        document.getElementById("status").innerText = "Modell laddad ✓";
-        console.log("Model loaded successfully");
-    } catch(err) {
-        console.error("Fel vid laddning:", err);
-        document.getElementById("status").innerText = "Fel vid laddning av modell (se konsolen)";
-    }
-}
+        <div id="status">Laddar AI-modell...</div>
+        
+        <input type="file" id="imageInput" accept="image/*">
+        <br>
+        <img id="preview" alt="Din bild">
+    </div>
 
-loadModel();
+    <script>
+        let model;
 
-document.getElementById("imageInput").addEventListener("change", async function(e) {
-    if(!model) {
-        alert("Modellen håller fortfarande på att laddas, vänta lite!");
-        return;
-    }
-
-    const file = e.target.files[0];
-    if(!file) return; // Avbryter om användaren stänger fönstret utan att välja fil
-
-    const img = document.getElementById("preview");
-    img.src = URL.createObjectURL(file);
-
-    img.onload = async () => {
-        document.getElementById("status").innerText = "Analyserar bild...";
-
-        try {
-            // Förbereder bilden för modellen
-            let tensor = tf.browser.fromPixels(img)
-                .resizeNearestNeighbor([224, 224])
-                .toFloat()
-                .div(255.0)
-                .expandDims();
-
-            // Kör modellen
-            let prediction = model.predict(tensor);
-            
-            // Hanterar outputen (GraphModels kan ibland returnera arrayer istället för en enda tensor)
-            let data = await (Array.isArray(prediction) ? prediction[0].data() : prediction.data());
-
-            // Hittar vilken klass som fick högst poäng
-            let max = Math.max(...data);
-            let index = data.indexOf(max);
-
-            document.getElementById("status").innerText =
-                "Klass: " + index + " | Säkerhet: " + (max*100).toFixed(2) + "%";
+        // Funktion för att ladda modellen
+        async function init() {
+            try {
+                // VIKTIGT: Vi använder './model.json' för att tvinga den att titta i samma mapp.
+                // Vi provar först loadGraphModel (vanligast för konverterade modeller).
+                // Om det misslyckas provar vi loadLayersModel.
                 
-            // Viktigt: Rensa upp minnet från grafikkortet/processorn
-            tf.dispose([tensor, prediction]);
+                try {
+                    model = await tf.loadGraphModel('./model.json');
+                    console.log("Graph Model laddad");
+                } catch (e) {
+                    console.log("Kunde inte ladda som Graph Model, testar Layers Model...");
+                    model = await tf.loadLayersModel('./model.json');
+                    console.log("Layers Model laddad");
+                }
 
-        } catch (error) {
-            console.error("Fel vid prediktion:", error);
-            document.getElementById("status").innerText = "Ett fel uppstod vid analysen.";
+                document.getElementById("status").innerText = "Redo! Ladda upp en bild.";
+            } catch (err) {
+                console.error(err);
+                document.getElementById("status").innerText = "Kunde inte ladda modellen. Se konsolen (F12).";
+            }
         }
-    }
-});
-</script>
 
+        // Kör laddningen direkt
+        init();
+
+        // Hantera bilduppladdning
+        document.getElementById("imageInput").addEventListener("change", async (e) => {
+            const file = e.target.files[0];
+            if (!file || !model) return;
+
+            const imgElement = document.getElementById("preview");
+            imgElement.src = URL.createObjectURL(file);
+            imgElement.style.display = "inline-block";
+
+            imgElement.onload = async () => {
+                document.getElementById("status").innerText = "Analyserar...";
+
+                // 1. Förbered bilden (Preprocessing)
+                // Vi använder tf.tidy för att automatiskt rensa minnet efteråt
+                const prediction = tf.tidy(() => {
+                    const tensor = tf.browser.fromPixels(imgElement)
+                        .resizeNearestNeighbor([224, 224]) // Ändra till din modells storlek om den inte är 224
+                        .toFloat()
+                        .div(255.0)
+                        .expandDims();
+                    return model.predict(tensor);
+                });
+
+                // 2. Hämta resultat
+                const data = await (Array.isArray(prediction) ? prediction[0].data() : prediction.data());
+                
+                // 3. Hitta högsta värdet
+                const maxProbability = Math.max(...data);
+                const classIndex = data.indexOf(maxProbability);
+
+                document.getElementById("status").innerHTML = `
+                    Resultat: <strong>Klass ${classIndex}</strong><br>
+                    Säkerhet: ${(maxProbability * 100).toFixed(2)}%
+                `;
+
+                // Rensa upp prediktions-tensorn
+                if (Array.isArray(prediction)) {
+                    prediction.forEach(t => t.dispose());
+                } else {
+                    prediction.dispose();
+                }
+            };
+        });
+    </script>
 </body>
 </html>
