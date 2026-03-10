@@ -7,23 +7,23 @@
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
 
 <style>
-body{
-font-family: Arial;
-text-align:center;
-background:#f2f2f2;
-margin-top:40px;
+body {
+    font-family: Arial;
+    text-align: center;
+    background: #f2f2f2;
+    margin-top: 40px;
 }
 
-img{
-max-width:300px;
-margin-top:20px;
-border-radius:10px;
+img {
+    max-width: 300px;
+    margin-top: 20px;
+    border-radius: 10px;
 }
 
-#status{
-font-size:20px;
-margin-top:20px;
-font-weight:bold;
+#status {
+    font-size: 20px;
+    margin-top: 20px;
+    font-weight: bold;
 }
 </style>
 
@@ -34,76 +34,73 @@ font-weight:bold;
 <h1>Bildigenkänning</h1>
 
 <input type="file" id="imageInput">
-
 <br>
-
 <img id="preview">
-
 <div id="status">Laddar modell...</div>
 
 <script>
-
 let model;
 
-async function loadModel(){
-
-try{
-
-model = await tf.loadLayersModel(
-tf.io.browserHTTPRequest("model.json",{
-credentials: "same-origin"
-})
-);
-
-document.getElementById("status").innerText = "Modell laddad ✓";
-
-console.log("Model loaded");
-
-}catch(err){
-
-console.error(err);
-document.getElementById("status").innerText = "Fel vid laddning av modell";
-
-}
-
+async function loadModel() {
+    try {
+        // Fix 1 & 2: Vi använder loadGraphModel och en relativ sökväg ('./')
+        model = await tf.loadGraphModel('./model.json');
+        
+        document.getElementById("status").innerText = "Modell laddad ✓";
+        console.log("Model loaded successfully");
+    } catch(err) {
+        console.error("Fel vid laddning:", err);
+        document.getElementById("status").innerText = "Fel vid laddning av modell (se konsolen)";
+    }
 }
 
 loadModel();
 
+document.getElementById("imageInput").addEventListener("change", async function(e) {
+    if(!model) {
+        alert("Modellen håller fortfarande på att laddas, vänta lite!");
+        return;
+    }
 
-document.getElementById("imageInput").addEventListener("change", async function(e){
+    const file = e.target.files[0];
+    if(!file) return; // Avbryter om användaren stänger fönstret utan att välja fil
 
-if(!model){
-alert("Modellen är inte laddad ännu");
-return;
-}
+    const img = document.getElementById("preview");
+    img.src = URL.createObjectURL(file);
 
-const file = e.target.files[0];
-const img = document.getElementById("preview");
+    img.onload = async () => {
+        document.getElementById("status").innerText = "Analyserar bild...";
 
-img.src = URL.createObjectURL(file);
+        try {
+            // Förbereder bilden för modellen
+            let tensor = tf.browser.fromPixels(img)
+                .resizeNearestNeighbor([224, 224])
+                .toFloat()
+                .div(255.0)
+                .expandDims();
 
-img.onload = async () => {
+            // Kör modellen
+            let prediction = model.predict(tensor);
+            
+            // Hanterar outputen (GraphModels kan ibland returnera arrayer istället för en enda tensor)
+            let data = await (Array.isArray(prediction) ? prediction[0].data() : prediction.data());
 
-let tensor = tf.browser.fromPixels(img)
-.resizeNearestNeighbor([224,224])
-.toFloat()
-.div(255.0)
-.expandDims();
+            // Hittar vilken klass som fick högst poäng
+            let max = Math.max(...data);
+            let index = data.indexOf(max);
 
-let prediction = model.predict(tensor);
-let data = await prediction.data();
+            document.getElementById("status").innerText =
+                "Klass: " + index + " | Säkerhet: " + (max*100).toFixed(2) + "%";
+                
+            // Viktigt: Rensa upp minnet från grafikkortet/processorn
+            tf.dispose([tensor, prediction]);
 
-let max = Math.max(...data);
-let index = data.indexOf(max);
-
-document.getElementById("status").innerText =
-"Klass: " + index + " | Säkerhet: " + (max*100).toFixed(2) + "%";
-
-}
-
+        } catch (error) {
+            console.error("Fel vid prediktion:", error);
+            document.getElementById("status").innerText = "Ett fel uppstod vid analysen.";
+        }
+    }
 });
-
 </script>
 
 </body>
