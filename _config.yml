@@ -1,0 +1,18 @@
+include:
+  - "*.bin"
+```
+
+**Gör så här:**
+1. Gå till ditt repo på GitHub
+2. Klicka **Add file → Create new file**
+3. Namnge den `_config.yml`
+4. Klistra in raden ovan
+5. Klicka **Commit changes**
+
+Vänta ~1 minut så GitHub Pages bygger om, prova sedan sidan igen.
+
+---
+
+**Om det fortfarande inte fungerar** — verifiera att filerna faktiskt är tillgängliga genom att öppna denna URL direkt i webbläsaren:
+```
+https://alphadick1337.github.io/imagerecognition/tfjs-modell/model.json
