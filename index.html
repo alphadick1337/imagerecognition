@@ -2,16 +2,16 @@
 <html lang="sv">
 <head>
 <meta charset="UTF-8">
-<title>Bildigenkänning</title>
+<title>TensorFlow Bildigenkänning</title>
 
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
 
 <style>
 body{
-font-family:Arial;
+font-family: Arial;
 text-align:center;
-margin-top:40px;
 background:#f2f2f2;
+margin-top:40px;
 }
 
 img{
@@ -21,8 +21,8 @@ border-radius:10px;
 }
 
 #status{
-margin-top:20px;
 font-size:20px;
+margin-top:20px;
 font-weight:bold;
 }
 </style>
@@ -31,7 +31,7 @@ font-weight:bold;
 
 <body>
 
-<h1>TensorFlow Bildigenkänning</h1>
+<h1>Bildigenkänning</h1>
 
 <input type="file" id="imageInput">
 
@@ -45,43 +45,50 @@ font-weight:bold;
 
 let model;
 
-async function init(){
+async function loadModel(){
 
 try{
 
-model = await tf.loadLayersModel('./model.json');
+model = await tf.loadLayersModel(
+tf.io.browserHTTPRequest("model.json",{
+credentials: "same-origin"
+})
+);
 
 document.getElementById("status").innerText = "Modell laddad ✓";
 
-}catch(error){
+console.log("Model loaded");
 
-console.error(error);
-document.getElementById("status").innerText = "Kunde inte ladda modellen";
+}catch(err){
+
+console.error(err);
+document.getElementById("status").innerText = "Fel vid laddning av modell";
 
 }
 
 }
 
-init();
+loadModel();
 
-document.getElementById("imageInput").addEventListener("change", async function(event){
+
+document.getElementById("imageInput").addEventListener("change", async function(e){
 
 if(!model){
-alert("Modellen är inte laddad än");
+alert("Modellen är inte laddad ännu");
 return;
 }
 
-const file = event.target.files[0];
+const file = e.target.files[0];
 const img = document.getElementById("preview");
 
 img.src = URL.createObjectURL(file);
 
-img.onload = async function(){
+img.onload = async () => {
 
 let tensor = tf.browser.fromPixels(img)
 .resizeNearestNeighbor([224,224])
 .toFloat()
-.div(255)
+.div(255.0)
 .expandDims();
 
 let prediction = model.predict(tensor);
